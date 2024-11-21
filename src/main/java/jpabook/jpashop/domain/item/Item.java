@@ -24,6 +24,6 @@ public abstract class Item {
     private int price;
     private String stockQuantity;
 
-    @ManyToMany(mappedBy = "items")
+    @ManyToMany(mappedBy = "items", fetch = FetchType.LAZY)
     private List<Category> categories = new ArrayList<>();
 }
