@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.weaver.ast.Or;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -47,6 +48,46 @@ public class OrderApiController {
         return orders.stream()
                 .map(OrderDto::new)
                 .collect(toList());
+    }
+
+    /**
+     * oneToMany 같은 상태에서 페치 조인을 하게 되면 (필드에 컬렉션이 있는 경우)
+     * 컬렉션 개수가 4개인 경우 (주문은 하나, 주문 상품은 네 개)
+     * 주문 상품 개수에 따라 주문도 네 개를 불러오게 된다. (조인이 되므로 주문도 4개 행이 불러와진다. 데이터가 뻥튀기 된다.)
+     * 그래서 JPQL에 distinct 를 넣어 준다.
+     * 이러면 실제 DB에서도 distinct를 담은 쿼리가 날아가는데, 대신 문제점이 하나 있다. SQL에서의 디스틴트는 정말 모든 행이 똑같아야 중복 제거가 된다.
+     * 따라서 반환되는 행들의 orderItem idx는 같으므로 데이터를 불러오는 과정에서 중복 제거가 되지 않는다.
+     * 그러나 JPQL에서의 distinct는, 애플리케이션 레벨에서 JPA가 order의 Idx를 기준으로 중복 제거를 해 준다.
+     * 이렇게 하면 원하는 결과값을 얻을 수 있다.
+     * [치명적인 단점] 페이징이 불가능하다. DB에서의 결과값과 애플리케이션에서 들어가는 결과값이 다르므로 하이버네이트에서 페이징 처리를 메모리에서 한다.
+     * 또한 컬렉션 페치 조인은 컬렉션이 하나일 때만 사용 가능하다.
+     */
+    @GetMapping("/api/v3/orders")
+    public List<OrderDto> ordersV3() {
+        List<Order> orders = orderRepository.findAllWithItem();
+        List<OrderDto> result = orders.stream()
+                .map(OrderDto::new)
+                .collect(toList());
+
+        return result;
+    }
+
+    /**
+     * JPA 옵션 이용
+     * default_batch_fetch_size: 100
+     * 컬렉션은 컬렉션 필드에 개별로 설정하려면 @BatchSize를 적용하면 된다.
+     * 엔티티는 엔티티 클래스에 적용하면 된다.
+     */
+    @GetMapping("/api/v3.1/orders")
+    public List<OrderDto> ordersV3_page(@RequestParam(value = "offset", defaultValue = "0") int offset,
+                                        @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        // ToOne 관계는 페이징에 영향을 주지 않기 때문에 페치 조인으로 한꺼번에 가지고 온다.
+        List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
+        List<OrderDto> result = orders.stream()
+                .map(OrderDto::new)
+                .collect(toList());
+
+        return result;
     }
 
     @Getter
