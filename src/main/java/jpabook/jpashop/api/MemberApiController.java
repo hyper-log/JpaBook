@@ -66,7 +66,7 @@ public class MemberApiController {
     public UpdateMemberResponse updateMemberV2(@PathVariable("id") Long id,
                                                @RequestBody @Valid UpdateMemberRequest request) {
         memberService.update(id, request.getName());
-        Member findMember = memberService.findOne(id);
+        Member findMember = memberService.findOne(id).orElse(null);
         return new UpdateMemberResponse(findMember.getId(), findMember.getName());
     }
 
